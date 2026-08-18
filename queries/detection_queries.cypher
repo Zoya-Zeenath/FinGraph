@@ -71,3 +71,185 @@ ORDER BY totalOut DESC;
 // ------------------------------------------------------------
 MATCH (a:Account {account_id: "ACCOUNT_ID_HERE"})-[r]-(neighbor)
 RETURN a, r, neighbor;
+
+// ------------------------------------------------------------
+// 7. ACCOUNT RISK SCORING
+// Combines multiple fraud signals into one explainable score.
+// Higher score = higher investigation priority.
+// ------------------------------------------------------------
+
+MATCH (a:Account)
+
+OPTIONAL MATCH (sender:Account)-[:TRANSFERRED_TO]->(a)
+WITH a, count(DISTINCT sender) AS incomingSenders
+
+OPTIONAL MATCH (a)-[out:TRANSFERRED_TO]->()
+WITH
+    a,
+    incomingSenders,
+    count(out) AS outboundTransactions,
+    coalesce(sum(out.amount), 0) AS totalOutbound
+
+OPTIONAL MATCH (a)-[near:TRANSFERRED_TO]->()
+WHERE near.amount >= 9000 AND near.amount < 10000
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    count(near) AS nearThresholdTransactions
+
+OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)
+               -[:TRANSFERRED_TO]->(c:Account)
+               -[:TRANSFERRED_TO]->(a)
+
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    count(DISTINCT b) AS circularConnections
+
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    circularConnections,
+
+    (
+        CASE
+            WHEN incomingSenders >= 10
+            THEN 25
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN nearThresholdTransactions >= 3
+            THEN 25
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN circularConnections > 0
+            THEN 30
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN totalOutbound >= 50000
+            THEN 20
+            ELSE 0
+        END
+    ) AS riskScore
+
+WHERE riskScore > 0
+
+RETURN
+    a.account_id AS account,
+    riskScore,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    circularConnections
+
+ORDER BY riskScore DESC;// ------------------------------------------------------------
+// 7. ACCOUNT RISK SCORING
+// Combines multiple fraud signals into one explainable score.
+// Higher score = higher investigation priority.
+// ------------------------------------------------------------
+
+MATCH (a:Account)
+
+OPTIONAL MATCH (sender:Account)-[:TRANSFERRED_TO]->(a)
+WITH a, count(DISTINCT sender) AS incomingSenders
+
+OPTIONAL MATCH (a)-[out:TRANSFERRED_TO]->()
+WITH
+    a,
+    incomingSenders,
+    count(out) AS outboundTransactions,
+    coalesce(sum(out.amount), 0) AS totalOutbound
+
+OPTIONAL MATCH (a)-[near:TRANSFERRED_TO]->()
+WHERE near.amount >= 9000 AND near.amount < 10000
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    count(near) AS nearThresholdTransactions
+
+OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)
+               -[:TRANSFERRED_TO]->(c:Account)
+               -[:TRANSFERRED_TO]->(a)
+
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    count(DISTINCT b) AS circularConnections
+
+WITH
+    a,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    circularConnections,
+
+    (
+        CASE
+            WHEN incomingSenders >= 10
+            THEN 25
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN nearThresholdTransactions >= 3
+            THEN 25
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN circularConnections > 0
+            THEN 30
+            ELSE 0
+        END
+
+        +
+
+        CASE
+            WHEN totalOutbound >= 50000
+            THEN 20
+            ELSE 0
+        END
+    ) AS riskScore
+
+WHERE riskScore > 0
+
+RETURN
+    a.account_id AS account,
+    riskScore,
+    incomingSenders,
+    outboundTransactions,
+    totalOutbound,
+    nearThresholdTransactions,
+    circularConnections
+
+ORDER BY riskScore DESC;

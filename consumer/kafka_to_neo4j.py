@@ -10,6 +10,7 @@ why a plain Python consumer is a reasonable substitute for a solo build.
 
 import json
 from collections import defaultdict
+from datetime import datetime, timezone
 
 from kafka import KafkaConsumer
 from neo4j import GraphDatabase
@@ -59,7 +60,7 @@ def main():
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
     )
 
-    print("Consumer started. Listening for transactions...\n")
+    print(f"Consumer started at {datetime.now(timezone.utc).isoformat()}. Listening for transactions...\n")
 
     with driver.session() as session:
         for message in consumer:

@@ -97,6 +97,32 @@ def get_transaction_volume():
     return run_query(query)
 
 
+def get_risk_scores():
+    query = """
+    MATCH (a:Account)
+    OPTIONAL MATCH (sender:Account)-[inTxn:TRANSFERRED_TO]->(a)
+    WITH a,
+         count(DISTINCT sender) AS numSenders,
+         sum(CASE WHEN inTxn.amount >= 9000 AND inTxn.amount < 10000 THEN 1 ELSE 0 END) AS suspiciousInboundCount
+    OPTIONAL MATCH (a)-[outTxn:TRANSFERRED_TO]->()
+    WITH a, numSenders, suspiciousInboundCount, sum(outTxn.amount) AS totalOut
+    OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)-[:TRANSFERRED_TO]->(c:Account)-[:TRANSFERRED_TO]->(a)
+    WHERE a <> b AND b <> c AND a <> c
+    WITH a, numSenders, suspiciousInboundCount, totalOut, (count(b) > 0) AS inCircularFlow
+    WITH a, numSenders, suspiciousInboundCount, coalesce(totalOut, 0) AS totalOut, inCircularFlow,
+         (CASE WHEN numSenders > 10 THEN 40 ELSE 0 END) +
+         (CASE WHEN suspiciousInboundCount > 5 THEN 30 ELSE 0 END) +
+         (CASE WHEN totalOut > 50000 THEN 20 ELSE 0 END) +
+         (CASE WHEN inCircularFlow THEN 10 ELSE 0 END) AS riskScore
+    WHERE riskScore > 0
+    RETURN a.account_id AS account, riskScore, numSenders, suspiciousInboundCount,
+           totalOut, inCircularFlow
+    ORDER BY riskScore DESC
+    LIMIT 25
+    """
+    return run_query(query)
+
+
 def get_frozen_accounts():
     query = """
     MATCH (a:Account {frozen: true})
@@ -162,6 +188,22 @@ with col2:
         st.dataframe(pd.DataFrame(circular), use_container_width=True, hide_index=True)
     else:
         st.info("No circular flow patterns (A→B→C→A) detected in current data.")
+
+st.divider()
+
+# ---- Account Risk Scoring panel ----
+st.subheader(" Account Risk Scores")
+risk_scores = get_risk_scores()
+if risk_scores:
+    df = pd.DataFrame(risk_scores)
+    df["totalOut"] = df["totalOut"].round(2)
+    st.dataframe(
+        df.style.background_gradient(subset=["riskScore"], cmap="Reds"),
+        use_container_width=True,
+        hide_index=True,
+    )
+else:
+    st.info("No accounts currently score above 0 on any risk signal.")
 
 st.divider()
 

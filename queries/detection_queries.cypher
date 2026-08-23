@@ -76,180 +76,38 @@ RETURN a, r, neighbor;
 // 7. ACCOUNT RISK SCORING
 // Combines multiple fraud signals into one explainable score.
 // Higher score = higher investigation priority.
+//
+// Score weights (out of 100), each mirroring the thresholds
+// already used in queries 1, 3, and 5 above:
+//   Starburst hub (>10 distinct senders)          : +40
+//   Just-under-threshold inbound (>5 txns)        : +30
+//   High-volume outbound (>$50,000 total)         : +20
+//   Involved in a circular flow (A->B->C->A)      : +10
 // ------------------------------------------------------------
-
 MATCH (a:Account)
 
-OPTIONAL MATCH (sender:Account)-[:TRANSFERRED_TO]->(a)
-WITH a, count(DISTINCT sender) AS incomingSenders
+// Signals 1 & 2: inbound transfers into this account
+OPTIONAL MATCH (sender:Account)-[inTxn:TRANSFERRED_TO]->(a)
+WITH a,
+     count(DISTINCT sender) AS numSenders,
+     sum(CASE WHEN inTxn.amount >= 9000 AND inTxn.amount < 10000 THEN 1 ELSE 0 END) AS suspiciousInboundCount
 
-OPTIONAL MATCH (a)-[out:TRANSFERRED_TO]->()
-WITH
-    a,
-    incomingSenders,
-    count(out) AS outboundTransactions,
-    coalesce(sum(out.amount), 0) AS totalOutbound
+// Signal 3: outbound transfers from this account
+OPTIONAL MATCH (a)-[outTxn:TRANSFERRED_TO]->()
+WITH a, numSenders, suspiciousInboundCount, sum(outTxn.amount) AS totalOut
 
-OPTIONAL MATCH (a)-[near:TRANSFERRED_TO]->()
-WHERE near.amount >= 9000 AND near.amount < 10000
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    count(near) AS nearThresholdTransactions
+// Signal 4: is this account part of a 3-hop circular flow?
+OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)-[:TRANSFERRED_TO]->(c:Account)-[:TRANSFERRED_TO]->(a)
+WHERE a <> b AND b <> c AND a <> c
+WITH a, numSenders, suspiciousInboundCount, totalOut, (count(b) > 0) AS inCircularFlow
 
-OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)
-               -[:TRANSFERRED_TO]->(c:Account)
-               -[:TRANSFERRED_TO]->(a)
-
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    count(DISTINCT b) AS circularConnections
-
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    circularConnections,
-
-    (
-        CASE
-            WHEN incomingSenders >= 10
-            THEN 25
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN nearThresholdTransactions >= 3
-            THEN 25
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN circularConnections > 0
-            THEN 30
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN totalOutbound >= 50000
-            THEN 20
-            ELSE 0
-        END
-    ) AS riskScore
+WITH a, numSenders, suspiciousInboundCount, coalesce(totalOut, 0) AS totalOut, inCircularFlow,
+     (CASE WHEN numSenders > 10 THEN 40 ELSE 0 END) +
+     (CASE WHEN suspiciousInboundCount > 5 THEN 30 ELSE 0 END) +
+     (CASE WHEN totalOut > 50000 THEN 20 ELSE 0 END) +
+     (CASE WHEN inCircularFlow THEN 10 ELSE 0 END) AS riskScore
 
 WHERE riskScore > 0
-
-RETURN
-    a.account_id AS account,
-    riskScore,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    circularConnections
-
-ORDER BY riskScore DESC;// ------------------------------------------------------------
-// 7. ACCOUNT RISK SCORING
-// Combines multiple fraud signals into one explainable score.
-// Higher score = higher investigation priority.
-// ------------------------------------------------------------
-
-MATCH (a:Account)
-
-OPTIONAL MATCH (sender:Account)-[:TRANSFERRED_TO]->(a)
-WITH a, count(DISTINCT sender) AS incomingSenders
-
-OPTIONAL MATCH (a)-[out:TRANSFERRED_TO]->()
-WITH
-    a,
-    incomingSenders,
-    count(out) AS outboundTransactions,
-    coalesce(sum(out.amount), 0) AS totalOutbound
-
-OPTIONAL MATCH (a)-[near:TRANSFERRED_TO]->()
-WHERE near.amount >= 9000 AND near.amount < 10000
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    count(near) AS nearThresholdTransactions
-
-OPTIONAL MATCH (a)-[:TRANSFERRED_TO]->(b:Account)
-               -[:TRANSFERRED_TO]->(c:Account)
-               -[:TRANSFERRED_TO]->(a)
-
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    count(DISTINCT b) AS circularConnections
-
-WITH
-    a,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    circularConnections,
-
-    (
-        CASE
-            WHEN incomingSenders >= 10
-            THEN 25
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN nearThresholdTransactions >= 3
-            THEN 25
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN circularConnections > 0
-            THEN 30
-            ELSE 0
-        END
-
-        +
-
-        CASE
-            WHEN totalOutbound >= 50000
-            THEN 20
-            ELSE 0
-        END
-    ) AS riskScore
-
-WHERE riskScore > 0
-
-RETURN
-    a.account_id AS account,
-    riskScore,
-    incomingSenders,
-    outboundTransactions,
-    totalOutbound,
-    nearThresholdTransactions,
-    circularConnections
-
+RETURN a.account_id AS account, riskScore, numSenders, suspiciousInboundCount,
+       totalOut, inCircularFlow
 ORDER BY riskScore DESC;

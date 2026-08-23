@@ -25,6 +25,7 @@ A custom React + neovis.js dashboard, or Neo4j Enterprise/Bloom, remain possible
 ## Status
 - [x] Graph visualization confirmed working in Neo4j Browser
 - [x] GDS algorithms (PageRank, WCC, Louvain) run and verified against planted fraud patterns
+- [x] "Freeze account" action — built as both a CLI (`freeze_account.py`) and a dashboard button (`app.py`)
+- [x] Account risk scoring — combines starburst, just-under-threshold, high-volume outbound, and circular-flow signals into one explainable score (`detection_queries.cypher`, query 7), surfaced on the dashboard
 - [ ] Manual node styling applied and screenshotted for the final report
 - [ ] Automation/alerts layer (Slack webhook) — not yet built
-- [ ] "Freeze account" action — not yet built

@@ -28,4 +28,4 @@ A custom React + neovis.js dashboard, or Neo4j Enterprise/Bloom, remain possible
 - [x] "Freeze account" action — built as both a CLI (`freeze_account.py`) and a dashboard button (`app.py`)
 - [x] Account risk scoring — combines starburst, just-under-threshold, high-volume outbound, and circular-flow signals into one explainable score (`detection_queries.cypher`, query 7), surfaced on the dashboard
 - [x] Automation/alerts layer — polling rules engine (`consumer/alerts.py`) re-checks account risk scores every 30s and posts a Slack alert via Incoming Webhook when an account crosses the risk threshold; verified working end-to-end, correctly caught planted shell account `ACCB878C18A` (score 70/100)
-- [ ] Manual node styling applied and screenshotted for the final report
+- [x] Manual node styling applied and screenshotted for the final report — added a temporary `:Frozen` label to frozen accounts (`SET a:Frozen`) so Neo4j Browser could style that label distinctly (red, larger size) without hand-picking individual nodes; screenshotted for the report
